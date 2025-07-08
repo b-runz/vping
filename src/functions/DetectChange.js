@@ -145,8 +145,6 @@ async function sendEmail(screenshotBuffer) {
 app.timer('DetectChange', {
     schedule: '0 */5 * * * *',
     handler: async (myTimer, context) => {
-        context.log(`Http function processed request for url "${request.url}"`);
-
         const url = 'https://grimfest.unitedtickets.dk/rd/event/grimfest-2025/grimfest/3105980';
         const containerName = 'vping'; // Replace with your actual container name
         const blobName = 'before.png';
