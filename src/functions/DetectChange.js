@@ -22,6 +22,44 @@ const blobServiceClient = BlobServiceClient.fromConnectionString(
 
 const emailClient = new EmailClient(emailConnectionString);
 
+async function isMonochromaticImage(buffer, tolerance = 5) {
+    try {
+        // Parse buffer into PNG object
+        const img = PNG.sync.read(buffer);
+        const { width, height, data } = img;
+        
+        if (width === 0 || height === 0) {
+            console.log('Empty image detected');
+            return true;
+        }
+        
+        // Get the first pixel's RGB values as reference
+        const firstR = data[0];
+        const firstG = data[1];
+        const firstB = data[2];
+        
+        // Check if all pixels are within tolerance of the first pixel
+        for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            
+            // Check if current pixel is within tolerance of first pixel
+            if (Math.abs(r - firstR) > tolerance || 
+                Math.abs(g - firstG) > tolerance || 
+                Math.abs(b - firstB) > tolerance) {
+                return false;
+            }
+        }
+        
+        console.log(`Monochromatic image detected with RGB(${firstR}, ${firstG}, ${firstB})`);
+        return true;
+    } catch (error) {
+        console.log(`Error checking if image is monochromatic: ${error.message}`);
+        return false;
+    }
+}
+
 async function compareImages(buffer1, buffer2, thresholdPercent = 1) {
     const pixelmatch = (await import('pixelmatch')).default;
     
@@ -160,13 +198,25 @@ app.timer('DetectChange', {
             const newScreenshotBuffer = await page.screenshot({ fullPage: true });
             await browser.close();
 
-            // 3. Compare images if before.png exists
+            // 3. Check if the new screenshot is monochromatic
+            const isMonochromatic = await isMonochromaticImage(newScreenshotBuffer);
+            if (isMonochromatic) {
+                context.log('New screenshot is monochromatic, skipping comparison.');
+                return {
+                    body: "equal",
+                    headers: {
+                        'content-type': 'text/plain'
+                    }
+                };
+            }
+
+            // 4. Compare images if before.png exists
             if (beforeImageBuffer) {
                 const comparison = await compareImages(beforeImageBuffer, newScreenshotBuffer);
                 
-                // 4. Respond based on comparison result
+                // 5. Respond based on comparison result
                 if (comparison.hasChanged) {
-                    // 5. If not equal (or dimension mismatch), overwrite the before.png on blob storage
+                    // 6. If not equal (or dimension mismatch), overwrite the before.png on blob storage
                     if (comparison.dimensionMismatch) {
                         context.log('Dimension mismatch detected - uploading new screenshot');
                     } else {
